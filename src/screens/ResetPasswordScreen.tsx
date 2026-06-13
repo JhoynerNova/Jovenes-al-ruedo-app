@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Alert,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +18,7 @@ import { resetPasswordSchema, ResetPasswordFormData } from '../utils/validationS
 import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
 import { resetPassword } from '../services/api';
+import { customAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ResetPassword'>;
 
@@ -44,14 +44,14 @@ export function ResetPasswordScreen({ route, navigation }: Props): React.JSX.Ele
     setLoading(true);
     try {
       await resetPassword(data);
-      Alert.alert(
+      customAlert(
         'Contraseña Restablecida',
         'Tu contraseña ha sido actualizada con éxito. Ya puedes iniciar sesión con tus nuevas credenciales.',
         [{ text: 'Ir al Login', onPress: () => navigation.navigate('Login') }]
       );
     } catch (err: any) {
       const errorMsg = err.message || 'Error al restablecer la contraseña';
-      Alert.alert('Error', errorMsg);
+      customAlert('Error', errorMsg);
     } finally {
       setLoading(false);
     }

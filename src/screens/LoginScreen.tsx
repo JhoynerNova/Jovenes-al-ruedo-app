@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Alert,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +18,7 @@ import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
 import { loginUser } from '../services/api';
 import { useAuthStore, persistUserSession } from '../stores/authStore';
+import { customAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Login'>;
 
@@ -57,7 +57,7 @@ export function LoginScreen({ navigation }: Props): React.JSX.Element {
       };
       await persistUserSession(userObj);
 
-      Alert.alert(
+      customAlert(
         '¡Bienvenido!',
         `Sesión iniciada correctamente como ${userObj.fullName}`,
         [{ text: 'Aceptar', onPress: () => navigation.navigate('Dashboard') }]
@@ -65,7 +65,7 @@ export function LoginScreen({ navigation }: Props): React.JSX.Element {
     } catch (err: any) {
       const errorMsg = err.message || 'Error al iniciar sesión';
       setError(errorMsg);
-      Alert.alert('Error', errorMsg);
+      customAlert('Error', errorMsg);
     } finally {
       setLoading(false);
     }

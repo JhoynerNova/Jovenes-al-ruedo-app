@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   SafeAreaView,
-  Alert,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -19,6 +18,7 @@ import { forgotPasswordSchema, ForgotPasswordFormData } from '../utils/validatio
 import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
 import { forgotPassword } from '../services/api';
+import { customAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'ForgotPassword'>;
 
@@ -47,7 +47,7 @@ export function ForgotPasswordScreen({ route, navigation }: Props): React.JSX.El
         ? `Se ha enviado un código de recuperación. Para propósitos de simulación local, tu código es: ${res.mockToken}`
         : 'Se ha enviado un enlace de recuperación a tu dirección de correo electrónico.';
 
-      Alert.alert(
+      customAlert(
         'Solicitud Enviada',
         alertMsg,
         [
@@ -59,7 +59,7 @@ export function ForgotPasswordScreen({ route, navigation }: Props): React.JSX.El
       );
     } catch (err: any) {
       const errorMsg = err.message || 'Error al solicitar la recuperación de contraseña';
-      Alert.alert('Error', errorMsg);
+      customAlert('Error', errorMsg);
     } finally {
       setLoading(false);
     }

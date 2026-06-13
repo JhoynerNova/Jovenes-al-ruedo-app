@@ -10,7 +10,6 @@ import {
   SafeAreaView,
   Modal,
   FlatList,
-  Alert,
 } from 'react-native';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,6 +20,7 @@ import { registerSchema, RegisterFormData, ARTISTIC_AREAS } from '../utils/valid
 import { CustomInput } from '../components/CustomInput';
 import { CustomButton } from '../components/CustomButton';
 import { registerUser } from '../services/api';
+import { customAlert } from '../utils/alert';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Register'>;
 
@@ -52,14 +52,14 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
     setLoading(true);
     try {
       await registerUser(data);
-      Alert.alert(
+      customAlert(
         '¡Registro Exitoso!',
         'Tu cuenta como joven artista ha sido creada de forma exitosa.',
         [{ text: 'Iniciar Sesión', onPress: () => navigation.navigate('Login') }]
       );
     } catch (err: any) {
       const errorMsg = err.message || 'Error al completar el registro';
-      Alert.alert('Error', errorMsg);
+      customAlert('Error', errorMsg);
     } finally {
       setLoading(false);
     }
