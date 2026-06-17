@@ -10,7 +10,7 @@ export const registerSchema = z.object({
   email: z.string().email('Por favor ingresa un correo electrónico válido'),
   age: z
     .preprocess((val) => Number(val), z.number())
-    .refine((age) => age >= 18, 'Debes tener al menos 18 años de edad para registrarte'),
+    .refine((age) => age >= 18 && age <= 28, 'Debes tener entre 18 y 28 años de edad para registrarte'),
   artisticArea: z.string().min(1, 'El área artística es requerida'),
   password: z
     .string()

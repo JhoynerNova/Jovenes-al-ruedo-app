@@ -337,6 +337,7 @@ export interface MockPostulacion {
   estado: string; // 'Enviada' | 'Revisando' | 'Seleccionada' | 'Rechazada'
   carta_presentacion?: string;
   cv_url?: string;
+  id_portafolio_interno?: number | null;
   created_at: string;
 }
 
@@ -541,7 +542,10 @@ export const getConvocatorias = async (search?: string): Promise<MockConvocatori
   return [...mockConvocatorias];
 };
 
-export const applyToConvocatoria = async (convId: number, data: { carta_presentacion?: string, cv_url?: string }): Promise<any> => {
+export const applyToConvocatoria = async (
+  convId: number,
+  data: { carta_presentacion?: string; cv_url?: string; id_portafolio_interno?: number | null }
+): Promise<any> => {
   const currentUser = useAuthStore.getState().user;
   if (!currentUser) throw new Error('Usuario no autenticado');
 
@@ -553,6 +557,7 @@ export const applyToConvocatoria = async (convId: number, data: { carta_presenta
         estado: 'Enviada',
         carta_presentacion: data.carta_presentacion,
         cv_url: data.cv_url,
+        id_portafolio_interno: data.id_portafolio_interno,
       }).select().single();
 
       if (error) throw new Error(error.message);
@@ -577,6 +582,7 @@ export const applyToConvocatoria = async (convId: number, data: { carta_presenta
     estado: 'Enviada',
     carta_presentacion: data.carta_presentacion,
     cv_url: data.cv_url || 'https://jovenes-al-ruedo.com/default-cv.pdf',
+    id_portafolio_interno: data.id_portafolio_interno || null,
     created_at: new Date().toISOString(),
   };
 

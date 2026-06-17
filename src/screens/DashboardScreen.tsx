@@ -63,6 +63,7 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const [applyModalVisible, setApplyModalVisible] = useState(false);
   const [applyCarta, setApplyCarta] = useState('');
   const [applyCvUrl, setApplyCvUrl] = useState('');
+  const [selectedApplyPortId, setSelectedApplyPortId] = useState<number | null>(null);
   const [appliedIds, setAppliedIds] = useState<number[]>([]);
   const [misPostulaciones, setMisPostulaciones] = useState<MockPostulacion[]>([]);
 
@@ -165,11 +166,13 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
       await applyToConvocatoria(selectedConv.id_conv, {
         carta_presentacion: applyCarta,
         cv_url: applyCvUrl,
+        id_portafolio_interno: selectedApplyPortId,
       });
       customAlert('¡Postulación Exitosa!', `Te has inscrito correctamente a: ${selectedConv.nombre}`);
       setApplyModalVisible(false);
       setApplyCarta('');
       setApplyCvUrl('');
+      setSelectedApplyPortId(null);
       setSelectedConv(null);
       loadData();
     } catch (err: any) {
@@ -742,6 +745,38 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
                 onChangeText={setApplyCvUrl}
                 autoCapitalize="none"
               />
+
+              <Text style={styles.applyLabel}>Adjuntar Obra de Portafolio (Opcional)</Text>
+              {portfolios.length === 0 ? (
+                <Text style={styles.noPortfoliosText}>No tienes obras registradas en tu portafolio aún.</Text>
+              ) : (
+                <View style={styles.portfolioSelectContainer}>
+                  {portfolios.map((item) => {
+                    const isSelected = selectedApplyPortId === item.id_port;
+                    return (
+                      <TouchableOpacity
+                        key={item.id_port}
+                        onPress={() => setSelectedApplyPortId(isSelected ? null : item.id_port)}
+                        style={[
+                          styles.portfolioSelectItem,
+                          isSelected && styles.portfolioSelectItemActive,
+                        ]}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'radio-button-off'}
+                          size={18}
+                          color={isSelected ? '#2EC4B6' : '#CBD5E1'}
+                          style={{ marginRight: 8 }}
+                        />
+                        <Text style={styles.portfolioSelectText} numberOfLines={1}>
+                          {item.titulo}
+                        </Text>
+                        <Text style={styles.portfolioSelectType}>({item.tipo})</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
 
               <CustomButton
                 title="Confirmar y Postularme"
@@ -1616,6 +1651,44 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     height: 120,
     marginBottom: 16,
+  },
+  noPortfoliosText: {
+    color: '#A0AEC0',
+    fontSize: 13,
+    fontStyle: 'italic',
+    marginBottom: 16,
+    marginLeft: 4,
+  },
+  portfolioSelectContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    padding: 8,
+    marginBottom: 16,
+  },
+  portfolioSelectItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+  },
+  portfolioSelectItemActive: {
+    backgroundColor: 'rgba(46, 196, 182, 0.15)',
+  },
+  portfolioSelectText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  portfolioSelectType: {
+    color: '#2EC4B6',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 6,
   },
 
   // Type Selector row
