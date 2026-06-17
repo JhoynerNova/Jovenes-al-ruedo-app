@@ -54,7 +54,7 @@ export function CustomButton({
   };
 
   const getTextStyle = () => {
-    const textStyle = [styles.text];
+    const textStyle: any[] = [styles.text];
     if (variant === 'secondary') {
       textStyle.push(styles.textSecondary);
     }
