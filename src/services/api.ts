@@ -134,6 +134,24 @@ export const registerUser = async (data: any): Promise<any> => {
 };
 
 export const loginUser = async (data: any): Promise<any> => {
+  // BYPASS PARA LA PRESENTACIÓN/DEMO: Si se usa el usuario de pruebas, saltar Supabase
+  if (data.email.toLowerCase() === 'artista@ejemplo.com' && data.password === 'Contraseña123') {
+    console.warn('Bypassing Supabase for presentation credentials.');
+    await delay(600);
+    return {
+      access_token: `mock_jwt_access_token_demo-1234`,
+      refresh_token: `mock_jwt_refresh_token_demo-1234`,
+      token_type: 'bearer',
+      user: {
+        id: 'demo-1234',
+        email: 'artista@ejemplo.com',
+        full_name: 'Jhoyner Nova',
+        age: 20,
+        artistic_area: 'Música',
+      },
+    };
+  }
+
   if (isSupabaseConfigured()) {
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
