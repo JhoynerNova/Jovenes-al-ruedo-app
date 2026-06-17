@@ -48,10 +48,13 @@ interface MockUser {
   id: string;
   email: string;
   fullName: string;
-  age: number;
-  artisticArea: string;
+  age?: number;
+  artisticArea?: string;
+  sector?: string;
+  role?: string;
   passwordHash: string;
   resetToken?: string;
+  isActive?: boolean;
 }
 
 const mockUsersDb: MockUser[] = [
@@ -61,7 +64,26 @@ const mockUsersDb: MockUser[] = [
     fullName: 'Jhoyner Nova',
     age: 20,
     artisticArea: 'Música',
+    role: 'artista',
     passwordHash: 'Contraseña123',
+    isActive: true,
+  },
+  {
+    id: 'demo-5678',
+    email: 'empresa@ejemplo.com',
+    fullName: 'Estudio Creativo 360',
+    sector: 'Diseño y Publicidad',
+    role: 'empresa',
+    passwordHash: 'Contraseña123',
+    isActive: true,
+  },
+  {
+    id: 'demo-9999',
+    email: 'admin@ejemplo.com',
+    fullName: 'Administrador Principal',
+    role: 'admin',
+    passwordHash: 'Contraseña123',
+    isActive: true,
   },
 ];
 
@@ -70,22 +92,28 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 export const registerUser = async (data: any): Promise<any> => {
   if (isSupabaseConfigured()) {
     try {
-      const currentYear = new Date().getFullYear();
-      const birthYear = currentYear - Number(data.age || 18);
-      const birthDateStr = `${birthYear}-01-01`;
+      const role = data.role || 'artista';
+      const meta: any = {
+        full_name: data.fullName,
+        role: role,
+      };
+
+      if (role === 'artista') {
+        const currentYear = new Date().getFullYear();
+        const birthYear = currentYear - Number(data.age || 18);
+        meta.birth_date = `${birthYear}-01-01`;
+        meta.age = Number(data.age);
+        meta.artistic_area = data.artisticArea;
+      } else {
+        meta.sector = data.sector;
+      }
 
       // Registrar en Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
-          data: {
-            full_name: data.fullName,
-            age: Number(data.age),
-            artistic_area: data.artisticArea,
-            birth_date: birthDateStr,
-            role: 'artista',
-          },
+          data: meta,
         },
       });
 
@@ -94,7 +122,7 @@ export const registerUser = async (data: any): Promise<any> => {
       }
 
       return {
-        message: 'Joven artista registrado exitosamente en Supabase',
+        message: 'Usuario registrado exitosamente en Supabase',
         user: authData.user,
       };
     } catch (error: any) {
@@ -111,32 +139,43 @@ export const registerUser = async (data: any): Promise<any> => {
     throw new Error('El correo electrónico ya se encuentra registrado');
   }
 
+  const role = data.role || 'artista';
   const newUser: MockUser = {
     id: Math.random().toString(36).substring(2, 11),
     email: data.email,
     fullName: data.fullName,
-    age: Number(data.age),
-    artisticArea: data.artisticArea,
+    role: role,
     passwordHash: data.password,
   };
 
+  if (role === 'artista') {
+    newUser.age = Number(data.age);
+    newUser.artisticArea = data.artisticArea;
+  } else {
+    newUser.sector = data.sector;
+  }
+
   mockUsersDb.push(newUser);
   return {
-    message: 'Joven artista registrado exitosamente (Simulado)',
+    message: 'Usuario registrado exitosamente (Simulado)',
     user: {
       id: newUser.id,
       email: newUser.email,
       full_name: newUser.fullName,
+      role: newUser.role,
       age: newUser.age,
       artistic_area: newUser.artisticArea,
+      sector: newUser.sector,
     },
   };
 };
 
 export const loginUser = async (data: any): Promise<any> => {
-  // BYPASS PARA LA PRESENTACIÓN/DEMO: Si se usa el usuario de pruebas, saltar Supabase
-  if (data.email.toLowerCase() === 'artista@ejemplo.com' && data.password === 'Contraseña123') {
-    console.warn('Bypassing Supabase for presentation credentials.');
+  // BYPASS PARA LA PRESENTACIÓN/DEMO: Cuentas preconfiguradas con diferentes roles
+  const emailLower = data.email.toLowerCase();
+  
+  if (emailLower === 'artista@ejemplo.com' && data.password === 'Contraseña123') {
+    console.warn('Bypassing Supabase for artist credentials.');
     await delay(600);
     return {
       access_token: `mock_jwt_access_token_demo-1234`,
@@ -148,6 +187,40 @@ export const loginUser = async (data: any): Promise<any> => {
         full_name: 'Jhoyner Nova',
         age: 20,
         artistic_area: 'Música',
+        role: 'artista',
+      },
+    };
+  }
+  
+  if (emailLower === 'empresa@ejemplo.com' && data.password === 'Contraseña123') {
+    console.warn('Bypassing Supabase for company credentials.');
+    await delay(600);
+    return {
+      access_token: `mock_jwt_access_token_demo-5678`,
+      refresh_token: `mock_jwt_refresh_token_demo-5678`,
+      token_type: 'bearer',
+      user: {
+        id: 'demo-5678',
+        email: 'empresa@ejemplo.com',
+        full_name: 'Estudio Creativo 360',
+        sector: 'Diseño y Publicidad',
+        role: 'empresa',
+      },
+    };
+  }
+
+  if (emailLower === 'admin@ejemplo.com' && data.password === 'Contraseña123') {
+    console.warn('Bypassing Supabase for admin credentials.');
+    await delay(600);
+    return {
+      access_token: `mock_jwt_access_token_demo-9999`,
+      refresh_token: `mock_jwt_refresh_token_demo-9999`,
+      token_type: 'bearer',
+      user: {
+        id: 'demo-9999',
+        email: 'admin@ejemplo.com',
+        full_name: 'Administrador Principal',
+        role: 'admin',
       },
     };
   }
@@ -171,8 +244,10 @@ export const loginUser = async (data: any): Promise<any> => {
           id: authData.user?.id || '',
           email: authData.user?.email || '',
           full_name: authData.user?.user_metadata?.full_name || data.email,
-          age: authData.user?.user_metadata?.age || 18,
-          artistic_area: authData.user?.user_metadata?.artistic_area || '',
+          age: authData.user?.user_metadata?.age,
+          artistic_area: authData.user?.user_metadata?.artistic_area,
+          role: authData.user?.user_metadata?.role || 'artista',
+          sector: authData.user?.user_metadata?.sector,
         },
       };
     } catch (error: any) {
@@ -204,6 +279,8 @@ export const loginUser = async (data: any): Promise<any> => {
       full_name: user.fullName,
       age: user.age,
       artistic_area: user.artisticArea,
+      role: user.role || 'artista',
+      sector: user.sector,
     },
   };
 };
@@ -339,6 +416,10 @@ export interface MockPostulacion {
   cv_url?: string;
   id_portafolio_interno?: number | null;
   created_at: string;
+  artista_nombre?: string;
+  artista_email?: string;
+  artista_area?: string;
+  artista_edad?: number;
 }
 
 export interface MockPortafolioItem {
@@ -433,6 +514,10 @@ const mockPostulaciones: MockPostulacion[] = [
     carta_presentacion: 'Hola, soy apasionado por la ilustración y manejo perfectamente Illustrator y Photoshop.',
     cv_url: 'https://ejemplo.com/mi_cv.pdf',
     created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    artista_nombre: 'Jhoyner Nova',
+    artista_email: 'artista@ejemplo.com',
+    artista_area: 'Música',
+    artista_edad: 20,
   }
 ];
 
@@ -584,6 +669,10 @@ export const applyToConvocatoria = async (
     cv_url: data.cv_url || 'https://jovenes-al-ruedo.com/default-cv.pdf',
     id_portafolio_interno: data.id_portafolio_interno || null,
     created_at: new Date().toISOString(),
+    artista_nombre: currentUser.fullName || 'Artista Anónimo',
+    artista_email: currentUser.email,
+    artista_area: currentUser.artisticArea || 'General',
+    artista_edad: currentUser.age || 20,
   };
 
   mockPostulaciones.push(newPost);
@@ -806,4 +895,299 @@ export const enviarMensaje = async (chatId: string, text: string): Promise<MockM
   }
 
   return newMsg;
+};
+
+// ==========================================
+// EMPRESA & ADMIN DASHBOARD METHODS
+// ==========================================
+
+export const getEmpresaConvocatorias = async (companyName: string): Promise<MockConvocatoria[]> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('conv')
+        .select('*')
+        .eq('empresa_nombre', companyName);
+      if (error) throw new Error(error.message);
+      
+      return (data || []).map((c: any) => ({
+        id_conv: c.id_conv,
+        nombre: c.nombre,
+        glue: c.glue,
+        nivel_experiencia: c.nivel_experiencia || 'No especificado',
+        tipo_jornada: c.tipo_jornada || 'No especificado',
+        rango_salarial: c.rango_salarial || 'A convenir',
+        ubicacion: c.ubicacion || 'Nacional',
+        empresa_nombre: c.empresa_nombre || companyName,
+        created_at: c.created_at,
+      }));
+    } catch (error) {
+      console.warn('Error fetching company jobs from Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(500);
+  return mockConvocatorias.filter(c => c.empresa_nombre.toLowerCase() === companyName.toLowerCase());
+};
+
+export const crearConvocatoria = async (data: {
+  nombre: string;
+  glue: string;
+  nivel_experiencia: string;
+  tipo_jornada: string;
+  rango_salarial: string;
+  ubicacion: string;
+  empresa_nombre: string;
+}): Promise<MockConvocatoria> => {
+  const currentUser = useAuthStore.getState().user;
+  if (!currentUser) throw new Error('Usuario no autenticado');
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data: inserted, error } = await supabase.from('conv').insert({
+        nombre: data.nombre,
+        glue: data.glue,
+        id_usr: currentUser.id,
+        nivel_experiencia: data.nivel_experiencia,
+        tipo_jornada: data.tipo_jornada,
+        rango_salarial: data.rango_salarial,
+        ubicacion: data.ubicacion,
+        empresa_nombre: data.empresa_nombre,
+      }).select().single();
+
+      if (error) throw new Error(error.message);
+      return {
+        id_conv: inserted.id_conv,
+        nombre: inserted.nombre,
+        glue: inserted.glue,
+        nivel_experiencia: inserted.nivel_experiencia || 'No especificado',
+        tipo_jornada: inserted.tipo_jornada || 'No especificado',
+        rango_salarial: inserted.rango_salarial || 'A convenir',
+        ubicacion: inserted.ubicacion || 'Nacional',
+        empresa_nombre: inserted.empresa_nombre || data.empresa_nombre,
+        created_at: inserted.created_at,
+      };
+    } catch (error) {
+      console.warn('Error creating convocatoria in Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(600);
+  const newConv: MockConvocatoria = {
+    id_conv: Math.floor(200 + Math.random() * 800),
+    nombre: data.nombre,
+    glue: data.glue,
+    nivel_experiencia: data.nivel_experiencia,
+    tipo_jornada: data.tipo_jornada,
+    rango_salarial: data.rango_salarial,
+    ubicacion: data.ubicacion,
+    empresa_nombre: data.empresa_nombre,
+    created_at: new Date().toISOString(),
+  };
+
+  mockConvocatorias.push(newConv);
+  return newConv;
+};
+
+export const getPostulacionesRecibidas = async (companyName: string): Promise<MockPostulacion[]> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('inscripcion')
+        .select('*, conv:id_conv(*)');
+      
+      if (error) throw new Error(error.message);
+
+      const filtered = (data || []).filter((p: any) => p.conv?.empresa_nombre?.toLowerCase() === companyName.toLowerCase());
+
+      const formatted = await Promise.all(filtered.map(async (p: any) => {
+        let artistName = 'Artista Anónimo';
+        let artistEmail = '';
+        let artistArea = 'General';
+        let artistAge = 20;
+
+        try {
+          const { data: userData } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', p.id_usr)
+            .single();
+          if (userData) {
+            artistName = userData.full_name;
+            artistEmail = userData.email;
+            artistArea = userData.artistic_area || 'General';
+            if (userData.birth_date) {
+              const birth = new Date(userData.birth_date);
+              const diff = Date.now() - birth.getTime();
+              artistAge = Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25));
+            }
+          }
+        } catch {
+          // Ignore
+        }
+
+        return {
+          id_i: p.id_i,
+          id_conv: p.id_conv,
+          conv_nombre: p.conv?.nombre || 'Convocatoria',
+          empresa_nombre: p.conv?.empresa_nombre || companyName,
+          estado: p.estado || 'Enviada',
+          carta_presentacion: p.carta_presentacion,
+          cv_url: p.cv_url,
+          created_at: p.created_at,
+          artista_nombre: artistName,
+          artista_email: artistEmail,
+          artista_area: artistArea,
+          artista_edad: artistAge,
+        };
+      }));
+
+      return formatted;
+    } catch (error) {
+      console.warn('Error fetching received applications from Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(600);
+  return mockPostulaciones.filter(p => p.empresa_nombre.toLowerCase() === companyName.toLowerCase());
+};
+
+export const actualizarEstadoPostulacion = async (id_i: number, nuevoEstado: string): Promise<any> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('inscripcion')
+        .update({ estado: nuevoEstado })
+        .eq('id_i', id_i);
+      
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating status in Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(400);
+  const post = mockPostulaciones.find(p => p.id_i === id_i);
+  if (post) {
+    post.estado = nuevoEstado;
+  }
+  return { success: true };
+};
+
+export const getTodosUsuarios = async (): Promise<any[]> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*');
+      
+      if (error) throw new Error(error.message);
+      return (data || []).map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        fullName: u.full_name,
+        role: u.role || 'artista',
+        isActive: u.is_active !== false,
+        created_at: u.created_at,
+        artisticArea: u.artistic_area,
+        sector: u.sector,
+        age: u.age,
+      }));
+    } catch (error) {
+      console.warn('Error fetching users from Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(500);
+  return mockUsersDb.map(u => ({
+    id: u.id,
+    email: u.email,
+    fullName: u.fullName,
+    role: u.role || 'artista',
+    isActive: u.isActive !== false,
+    artisticArea: u.artisticArea,
+    sector: u.sector,
+    age: u.age,
+    created_at: new Date().toISOString(),
+  }));
+};
+
+export const toggleEstadoUsuario = async (userId: string, active: boolean): Promise<any> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ is_active: active })
+        .eq('id', userId);
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error updating user active status in Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(300);
+  const user = mockUsersDb.find(u => u.id === userId);
+  if (user) {
+    user.isActive = active;
+  }
+  return { success: true };
+};
+
+export const getPlatformMetrics = async (): Promise<any> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { count: usersCount } = await supabase.from('users').select('*', { count: 'exact', head: true });
+      const { count: convsCount } = await supabase.from('conv').select('*', { count: 'exact', head: true });
+      const { count: appsCount } = await supabase.from('inscripcion').select('*', { count: 'exact', head: true });
+
+      return {
+        totalUsuarios: usersCount || 0,
+        totalArtistas: Math.round((usersCount || 0) * 0.7),
+        totalEmpresas: Math.round((usersCount || 0) * 0.3),
+        totalConvocatorias: convsCount || 0,
+        totalPostulaciones: appsCount || 0,
+      };
+    } catch (error) {
+      console.warn('Error fetching platform metrics, falling back to mock:', error);
+    }
+  }
+
+  await delay(300);
+  const totalUsuarios = mockUsersDb.length;
+  const totalArtistas = mockUsersDb.filter(u => u.role === 'artista').length;
+  const totalEmpresas = mockUsersDb.filter(u => u.role === 'empresa').length;
+  const totalConvocatorias = mockConvocatorias.length;
+  const totalPostulaciones = mockPostulaciones.length;
+
+  return {
+    totalUsuarios,
+    totalArtistas,
+    totalEmpresas,
+    totalConvocatorias,
+    totalPostulaciones,
+  };
+};
+
+export const eliminarConvocatoriaAdmin = async (id_conv: number): Promise<any> => {
+  if (isSupabaseConfigured()) {
+    try {
+      const { error } = await supabase
+        .from('conv')
+        .delete()
+        .eq('id_conv', id_conv);
+      if (error) throw new Error(error.message);
+      return { success: true };
+    } catch (error) {
+      console.warn('Error deleting convocatoria in Supabase, falling back to mock:', error);
+    }
+  }
+
+  await delay(400);
+  const idx = mockConvocatorias.findIndex(c => c.id_conv === id_conv);
+  if (idx !== -1) {
+    mockConvocatorias.splice(idx, 1);
+  }
+  return { success: true };
 };

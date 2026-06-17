@@ -2,8 +2,10 @@ export interface User {
   id: string;
   email: string;
   fullName: string;
-  age: number;
-  artisticArea: string;
+  age?: number;
+  artisticArea?: string;
+  role?: string;
+  sector?: string;
 }
 
 export interface AuthState {

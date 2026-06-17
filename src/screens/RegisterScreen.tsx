@@ -37,24 +37,30 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
     defaultValues: {
+      role: 'artista',
       fullName: '',
       email: '',
       age: 18,
       artisticArea: '',
+      sector: '',
       password: '',
       confirmPassword: '',
     },
   });
 
+  const selectedRole = watch('role') || 'artista';
   const selectedArea = watch('artisticArea');
 
   const onSubmit = async (data: RegisterFormData) => {
     setLoading(true);
     try {
       await registerUser(data);
+      const isArtist = data.role === 'artista';
       customAlert(
         '¡Registro Exitoso!',
-        'Tu cuenta como joven artista ha sido creada de forma exitosa.',
+        isArtist
+          ? 'Tu cuenta como joven artista ha sido creada de forma exitosa.'
+          : 'Tu cuenta como empresa ha sido creada de forma exitosa.',
         [{ text: 'Iniciar Sesión', onPress: () => navigation.navigate('Login') }]
       );
     } catch (err: any) {
@@ -84,17 +90,55 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
           </TouchableOpacity>
 
           <View style={styles.formCard}>
-            <Text style={styles.formTitle}>Registro de Artista</Text>
-            <Text style={styles.formSubtitle}>Únete a la red cultural más grande</Text>
+            <Text style={styles.formTitle}>
+              {selectedRole === 'artista' ? 'Registro de Artista' : 'Registro de Empresa'}
+            </Text>
+            <Text style={styles.formSubtitle}>
+              {selectedRole === 'artista'
+                ? 'Únete a la red cultural más grande'
+                : 'Encuentra y conecta con el mejor talento joven'}
+            </Text>
+
+            {/* Selector de Rol */}
+            <View style={styles.roleContainer}>
+              <TouchableOpacity
+                style={[styles.roleBtn, selectedRole === 'artista' && styles.roleBtnActive]}
+                onPress={() => setValue('role', 'artista', { shouldValidate: true })}
+              >
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color={selectedRole === 'artista' ? '#FFFFFF' : '#CBD5E1'}
+                  style={styles.roleIcon}
+                />
+                <Text style={[styles.roleBtnText, selectedRole === 'artista' && styles.roleBtnTextActive]}>
+                  Artista
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.roleBtn, selectedRole === 'empresa' && styles.roleBtnActive]}
+                onPress={() => setValue('role', 'empresa', { shouldValidate: true })}
+              >
+                <Ionicons
+                  name="business-outline"
+                  size={18}
+                  color={selectedRole === 'empresa' ? '#FFFFFF' : '#CBD5E1'}
+                  style={styles.roleIcon}
+                />
+                <Text style={[styles.roleBtnText, selectedRole === 'empresa' && styles.roleBtnTextActive]}>
+                  Empresa
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             <Controller
               control={control}
               name="fullName"
               render={({ field: { onChange, onBlur, value } }) => (
                 <CustomInput
-                  label="Nombre Completo"
-                  placeholder="Tu nombre completo"
-                  iconName="person-outline"
+                  label={selectedRole === 'artista' ? 'Nombre Completo' : 'Nombre de la Empresa'}
+                  placeholder={selectedRole === 'artista' ? 'Tu nombre completo' : 'Nombre de la empresa'}
+                  iconName={selectedRole === 'artista' ? 'person-outline' : 'business-outline'}
                   onBlur={onBlur}
                   onChangeText={onChange}
                   value={value}
@@ -121,47 +165,65 @@ export function RegisterScreen({ navigation }: Props): React.JSX.Element {
               )}
             />
 
-            <View style={styles.row}>
-              <View style={styles.halfWidth}>
-                <Controller
-                  control={control}
-                  name="age"
-                  render={({ field: { onChange, onBlur, value } }) => (
-                    <CustomInput
-                      label="Edad"
-                      placeholder="18"
-                      keyboardType="numeric"
-                      iconName="calendar-outline"
-                      onBlur={onBlur}
-                      onChangeText={onChange}
-                      value={value?.toString() || ''}
-                      error={errors.age?.message}
-                    />
-                  )}
-                />
-              </View>
+            {selectedRole === 'artista' ? (
+              <View style={styles.row}>
+                <View style={styles.halfWidth}>
+                  <Controller
+                    control={control}
+                    name="age"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <CustomInput
+                        label="Edad"
+                        placeholder="18"
+                        keyboardType="numeric"
+                        iconName="calendar-outline"
+                        onBlur={onBlur}
+                        onChangeText={onChange}
+                        value={value?.toString() || ''}
+                        error={errors.age?.message}
+                      />
+                    )}
+                  />
+                </View>
 
-              <View style={styles.halfWidth}>
-                <Text style={[styles.label, !!errors.artisticArea && styles.labelError]}>Área Artística</Text>
-                <TouchableOpacity
-                  onPress={() => setModalVisible(true)}
-                  style={[
-                    styles.selectorButton,
-                    !!selectedArea && styles.selectorActive,
-                    !!errors.artisticArea && styles.selectorError,
-                  ]}
-                >
-                  <Ionicons name="color-palette-outline" size={20} color={errors.artisticArea ? '#F2994A' : '#A0AEC0'} style={styles.selectorIcon} />
-                  <Text style={[styles.selectorText, !selectedArea && styles.selectorPlaceholder]}>
-                    {selectedArea || 'Seleccionar'}
-                  </Text>
-                  <Ionicons name="chevron-down-outline" size={16} color="#CBD5E1" />
-                </TouchableOpacity>
-                {errors.artisticArea && (
-                  <Text style={styles.errorText}>{errors.artisticArea.message}</Text>
-                )}
+                <View style={styles.halfWidth}>
+                  <Text style={[styles.label, !!errors.artisticArea && styles.labelError]}>Área Artística</Text>
+                  <TouchableOpacity
+                    onPress={() => setModalVisible(true)}
+                    style={[
+                      styles.selectorButton,
+                      !!selectedArea && styles.selectorActive,
+                      !!errors.artisticArea && styles.selectorError,
+                    ]}
+                  >
+                    <Ionicons name="color-palette-outline" size={20} color={errors.artisticArea ? '#F2994A' : '#A0AEC0'} style={styles.selectorIcon} />
+                    <Text style={[styles.selectorText, !selectedArea && styles.selectorPlaceholder]}>
+                      {selectedArea || 'Seleccionar'}
+                    </Text>
+                    <Ionicons name="chevron-down-outline" size={16} color="#CBD5E1" />
+                  </TouchableOpacity>
+                  {errors.artisticArea && (
+                    <Text style={styles.errorText}>{errors.artisticArea.message}</Text>
+                  )}
+                </View>
               </View>
-            </View>
+            ) : (
+              <Controller
+                control={control}
+                name="sector"
+                render={({ field: { onChange, onBlur, value } }) => (
+                  <CustomInput
+                    label="Sector de la Industria"
+                    placeholder="Ej. Diseño, Música, Publicidad..."
+                    iconName="briefcase-outline"
+                    onBlur={onBlur}
+                    onChangeText={onChange}
+                    value={value || ''}
+                    error={errors.sector?.message}
+                  />
+                )}
+              />
+            )}
 
             <Controller
               control={control}
@@ -303,6 +365,38 @@ const styles = StyleSheet.create({
     color: '#CBD5E1',
     marginBottom: 24,
     marginTop: 4,
+  },
+  roleContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 12,
+    padding: 4,
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  roleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  roleBtnActive: {
+    backgroundColor: '#5A3FA0',
+  },
+  roleIcon: {
+    marginRight: 6,
+  },
+  roleBtnText: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  roleBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   row: {
     flexDirection: 'row',

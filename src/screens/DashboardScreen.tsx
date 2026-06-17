@@ -31,6 +31,14 @@ import {
   getConversaciones,
   getMensajes,
   enviarMensaje,
+  getEmpresaConvocatorias,
+  crearConvocatoria,
+  getPostulacionesRecibidas,
+  actualizarEstadoPostulacion,
+  getTodosUsuarios,
+  toggleEstadoUsuario,
+  getPlatformMetrics,
+  eliminarConvocatoriaAdmin,
   MockConvocatoria,
   MockPostulacion,
   MockPortafolioItem,
@@ -39,7 +47,7 @@ import {
 } from '../services/api';
 
 type Props = NativeStackScreenProps<AuthStackParamList, 'Dashboard'>;
-type TabType = 'resumen' | 'convocatorias' | 'portafolio' | 'chat' | 'perfil';
+type TabType = 'resumen' | 'convocatorias' | 'portafolio' | 'chat' | 'perfil' | 'candidatos' | 'usuarios';
 
 export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const { user, logout } = useAuthStore();
@@ -84,28 +92,114 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [sendingMsg, setSendingMsg] = useState(false);
 
+  // Empresa states
+  const [empresaConvs, setEmpresaConvs] = useState<MockConvocatoria[]>([]);
+  const [recibidas, setRecibidas] = useState<MockPostulacion[]>([]);
+  const [selectedApplicant, setSelectedApplicant] = useState<MockPostulacion | null>(null);
+  const [applicantModalVisible, setApplicantModalVisible] = useState(false);
+  const [createConvModalVisible, setCreateConvModalVisible] = useState(false);
+
+  // Create job fields
+  const [newConvNombre, setNewConvNombre] = useState('');
+  const [newConvGlue, setNewConvGlue] = useState('');
+  const [newConvExp, setNewConvExp] = useState('Sin experiencia');
+  const [newConvJornada, setNewConvJornada] = useState('Tiempo Completo');
+  const [newConvSalario, setNewConvSalario] = useState('');
+  const [newConvUbicacion, setNewConvUbicacion] = useState('');
+
+  // Admin states
+  const [todosUsuarios, setTodosUsuarios] = useState<any[]>([]);
+  const [metrics, setMetrics] = useState<any>({
+    totalUsuarios: 0,
+    totalArtistas: 0,
+    totalEmpresas: 0,
+    totalConvocatorias: 0,
+    totalPostulaciones: 0,
+  });
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+
+  // Dynamic tab switcher helper
+  const getTabs = () => {
+    const role = user?.role || 'artista';
+    if (role === 'empresa') {
+      return [
+        { id: 'resumen', label: 'Inicio', icon: 'home' },
+        { id: 'convocatorias', label: 'Mis Vacantes', icon: 'briefcase' },
+        { id: 'candidatos', label: 'Candidatos', icon: 'people' },
+        { id: 'chat', label: 'Mensajes', icon: 'chatbubbles' },
+        { id: 'perfil', label: 'Perfil', icon: 'person' },
+      ];
+    } else if (role === 'admin') {
+      return [
+        { id: 'resumen', label: 'Métricas', icon: 'stats-chart' },
+        { id: 'usuarios', label: 'Usuarios', icon: 'people' },
+        { id: 'convocatorias', label: 'Convocas', icon: 'briefcase' },
+        { id: 'perfil', label: 'Perfil', icon: 'person' },
+      ];
+    } else {
+      return [
+        { id: 'resumen', label: 'Inicio', icon: 'home' },
+        { id: 'convocatorias', label: 'Convocas', icon: 'briefcase' },
+        { id: 'portafolio', label: 'Portafolio', icon: 'folder' },
+        { id: 'chat', label: 'Mensajes', icon: 'chatbubbles' },
+        { id: 'perfil', label: 'Perfil', icon: 'person' },
+      ];
+    }
+  };
+
+  // Reset tab to resumen if role changes
+  useEffect(() => {
+    const tabs = getTabs();
+    const isValid = tabs.some(t => t.id === activeTab);
+    if (!isValid) {
+      setActiveTab('resumen');
+    }
+  }, [user]);
+
   // Load initial data
   const loadData = useCallback(async () => {
     try {
       setLoadingConvs(true);
-      const c = await getConvocatorias(searchQuery);
-      setConvs(c);
+      const role = user?.role || 'artista';
 
-      const p = await getMisPostulaciones();
-      setMisPostulaciones(p);
-      setAppliedIds(p.map(item => item.id_conv));
+      if (role === 'artista') {
+        const c = await getConvocatorias(searchQuery);
+        setConvs(c);
 
-      const port = await getPortafolios();
-      setPortfolios(port);
+        const p = await getMisPostulaciones();
+        setMisPostulaciones(p);
+        setAppliedIds(p.map(item => item.id_conv));
 
-      const convsList = await getConversaciones();
-      setConversaciones(convsList);
+        const port = await getPortafolios();
+        setPortfolios(port);
+
+        const convsList = await getConversaciones();
+        setConversaciones(convsList);
+      } else if (role === 'empresa') {
+        const c = await getEmpresaConvocatorias(user?.fullName || '');
+        setEmpresaConvs(c);
+
+        const p = await getPostulacionesRecibidas(user?.fullName || '');
+        setRecibidas(p);
+
+        const convsList = await getConversaciones();
+        setConversaciones(convsList);
+      } else if (role === 'admin') {
+        const m = await getPlatformMetrics();
+        setMetrics(m);
+
+        const u = await getTodosUsuarios();
+        setTodosUsuarios(u);
+
+        const c = await getConvocatorias();
+        setConvs(c);
+      }
     } catch (err) {
       console.error('Error loading dashboard data:', err);
     } finally {
       setLoadingConvs(false);
     }
-  }, [searchQuery]);
+  }, [searchQuery, user]);
 
   useEffect(() => {
     loadData();
@@ -157,6 +251,77 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
       setPasswordLoading(false);
     }
   };
+
+  // Empresa & Admin Handlers
+  const handleUpdateStatus = async (id_i: number, status: string) => {
+    try {
+      await actualizarEstadoPostulacion(id_i, status);
+      customAlert('Éxito', `El estado del candidato ha sido actualizado a: ${status}`);
+      loadData();
+    } catch (err: any) {
+      customAlert('Error', err.message || 'No se pudo actualizar el estado');
+    }
+  };
+
+  const handleCreateConvSubmit = async () => {
+    if (!newConvNombre || !newConvGlue || !newConvSalario || !newConvUbicacion) {
+      customAlert('Error', 'Todos los campos son obligatorios');
+      return;
+    }
+    setLoading(true);
+    try {
+      await crearConvocatoria({
+        nombre: newConvNombre,
+        glue: newConvGlue,
+        nivel_experiencia: newConvExp,
+        tipo_jornada: newConvJornada,
+        rango_salarial: newConvSalario,
+        ubicacion: newConvUbicacion,
+        empresa_nombre: user?.fullName || 'Empresa',
+      });
+      customAlert('Éxito', 'Convocatoria publicada correctamente');
+      setCreateConvModalVisible(false);
+      setNewConvNombre('');
+      setNewConvGlue('');
+      setNewConvSalario('');
+      setNewConvUbicacion('');
+      loadData();
+    } catch (err: any) {
+      customAlert('Error', err.message || 'No se pudo crear la convocatoria');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleUser = async (userId: string, currentActive: boolean) => {
+    try {
+      const nextState = !currentActive;
+      await toggleEstadoUsuario(userId, nextState);
+      customAlert('Usuario Actualizado', `El usuario ha sido ${nextState ? 'activado' : 'desactivado'} con éxito.`);
+      loadData();
+    } catch (err: any) {
+      customAlert('Error', err.message || 'No se pudo actualizar el usuario');
+    }
+  };
+
+  const handleDeleteConvAdmin = (id_conv: number) => {
+    customAlert('Eliminar Convocatoria', '¿Estás seguro de que quieres eliminar esta convocatoria por violar las normas de la plataforma?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await eliminarConvocatoriaAdmin(id_conv);
+            loadData();
+          } catch (err: any) {
+            customAlert('Error', err.message || 'No se pudo eliminar la convocatoria');
+          }
+        },
+      },
+    ]);
+  };
+
 
   // 2. Apply to convocatoria
   const handleApplySubmit = async () => {
@@ -579,13 +744,427 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
     </ScrollView>
   );
 
+  // View F: Empresa Resumen
+  const renderEmpresaResumen = () => (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.welcomeBanner}>
+        <View style={styles.bannerFlex}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.welcomeTitle}>¡Hola, {user?.fullName || 'Empresa'}!</Text>
+            <Text style={styles.welcomeSub}>Publica ofertas y conecta con los mejores artistas jóvenes del país.</Text>
+          </View>
+          <Ionicons name="sparkles" size={40} color="#F2994A" />
+        </View>
+      </View>
+
+      <View style={styles.statsContainer}>
+        <TouchableOpacity style={styles.statCard} onPress={() => setActiveTab('convocatorias')}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(90, 63, 160, 0.15)' }]}>
+            <Ionicons name="briefcase-outline" size={24} color="#5A3FA0" />
+          </View>
+          <Text style={styles.statNumber}>{empresaConvs.length}</Text>
+          <Text style={styles.statLabel}>Convocatorias</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.statCard} onPress={() => setActiveTab('candidatos')}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(46, 196, 182, 0.15)' }]}>
+            <Ionicons name="people-outline" size={24} color="#2EC4B6" />
+          </View>
+          <Text style={styles.statNumber}>{recibidas.length}</Text>
+          <Text style={styles.statLabel}>Postulantes</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.statCard} onPress={() => setActiveTab('chat')}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(242, 153, 74, 0.15)' }]}>
+            <Ionicons name="chatbubbles-outline" size={24} color="#F2994A" />
+          </View>
+          <Text style={styles.statNumber}>{conversaciones.length}</Text>
+          <Text style={styles.statLabel}>Chats Activos</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Convocatorias Recientes</Text>
+        <TouchableOpacity onPress={() => setActiveTab('convocatorias')}>
+          <Text style={styles.seeAllText}>Ver todas</Text>
+        </TouchableOpacity>
+      </View>
+
+      {empresaConvs.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptySub}>Aún no has publicado convocatorias.</Text>
+        </View>
+      ) : (
+        empresaConvs.slice(0, 2).map((item) => (
+          <View key={item.id_conv} style={styles.jobCard}>
+            <View style={styles.jobHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.jobTitle}>{item.nombre}</Text>
+                <Text style={styles.jobCompany}>{item.ubicacion}</Text>
+              </View>
+            </View>
+            <Text style={styles.jobDesc} numberOfLines={2}>{item.glue}</Text>
+            <View style={styles.jobMetadata}>
+              <View style={styles.metaRow}>
+                <Ionicons name="cash-outline" size={14} color="#CBD5E1" />
+                <Text style={styles.metaText}>{item.rango_salarial}</Text>
+              </View>
+              <View style={styles.metaRow}>
+                <Ionicons name="time-outline" size={14} color="#CBD5E1" />
+                <Text style={styles.metaText}>{item.tipo_jornada}</Text>
+              </View>
+            </View>
+          </View>
+        ))
+      )}
+
+      <CustomButton
+        title="Crear Nueva Convocatoria"
+        onPress={() => setCreateConvModalVisible(true)}
+        variant="accent"
+        style={{ marginTop: 16 }}
+      />
+    </ScrollView>
+  );
+
+  // View G: Empresa Convocatorias
+  const renderEmpresaConvocatorias = () => (
+    <View style={{ flex: 1 }}>
+      <View style={styles.portafolioHeader}>
+        <Text style={styles.subPageTitle}>Mis Convocatorias Publicadas</Text>
+        <TouchableOpacity style={styles.addPortBtn} onPress={() => setCreateConvModalVisible(true)}>
+          <Ionicons name="add-outline" size={22} color="#FFFFFF" />
+          <Text style={styles.addPortBtnText}>Nueva Vacante</Text>
+        </TouchableOpacity>
+      </View>
+
+      {empresaConvs.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="briefcase-outline" size={64} color="rgba(255, 255, 255, 0.2)" />
+          <Text style={styles.emptyTitle}>No tienes vacantes publicadas</Text>
+          <Text style={styles.emptySub}>Publica ofertas para recibir candidaturas de los mejores talentos jóvenes.</Text>
+          <CustomButton
+            title="Publicar Oferta"
+            onPress={() => setCreateConvModalVisible(true)}
+            variant="accent"
+            style={{ width: '70%', marginTop: 16 }}
+          />
+        </View>
+      ) : (
+        <FlatList
+          data={empresaConvs}
+          keyExtractor={(item) => item.id_conv.toString()}
+          contentContainerStyle={styles.scrollContainer}
+          renderItem={({ item }) => (
+            <View style={styles.jobCard}>
+              <View style={styles.jobHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.jobTitle}>{item.nombre}</Text>
+                  <Text style={styles.jobCompany}>{item.ubicacion} • {item.tipo_jornada}</Text>
+                </View>
+              </View>
+              <Text style={styles.jobDesc}>{item.glue}</Text>
+              <View style={styles.jobMetadata}>
+                <View style={styles.metaRow}>
+                  <Ionicons name="cash-outline" size={14} color="#CBD5E1" />
+                  <Text style={styles.metaText}>{item.rango_salarial}</Text>
+                </View>
+                <View style={styles.metaRow}>
+                  <Ionicons name="ribbon-outline" size={14} color="#CBD5E1" />
+                  <Text style={styles.metaText}>{item.nivel_experiencia}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+        />
+      )}
+    </View>
+  );
+
+  // View H: Empresa Candidatos
+  const renderEmpresaCandidatos = () => (
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
+        <Text style={styles.subPageTitle}>Candidatos Postulados</Text>
+      </View>
+
+      {recibidas.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Ionicons name="people-outline" size={64} color="rgba(255, 255, 255, 0.2)" />
+          <Text style={styles.emptyTitle}>Sin postulaciones aún</Text>
+          <Text style={styles.emptySub}>Las candidaturas recibidas para tus vacantes aparecerán en esta lista.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={recibidas}
+          keyExtractor={(item) => item.id_i.toString()}
+          contentContainerStyle={styles.scrollContainer}
+          renderItem={({ item }) => {
+            let badgeColor = '#5A3FA0';
+            if (item.estado === 'Seleccionada') badgeColor = '#2EC4B6';
+            else if (item.estado === 'Rechazada') badgeColor = '#F2994A';
+            else if (item.estado === 'Revisando') badgeColor = '#3182CE';
+
+            return (
+              <TouchableOpacity
+                style={styles.portfolioCard}
+                onPress={() => {
+                  setSelectedApplicant(item);
+                  setApplicantModalVisible(true);
+                }}
+              >
+                <View style={[styles.portIconContainer, { backgroundColor: 'rgba(46, 196, 182, 0.15)' }]}>
+                  <Ionicons name="person-outline" size={24} color="#2EC4B6" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 16 }}>
+                  <Text style={styles.portfolioCardTitle}>{item.artista_nombre || 'Artista Anónimo'}</Text>
+                  <Text style={styles.portfolioCardType}>{item.conv_nombre}</Text>
+                  <Text style={[styles.portfolioCardUrl, { color: '#CBD5E1' }]} numberOfLines={1}>
+                    Área: {item.artista_area || 'General'}
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                  <View style={{ backgroundColor: badgeColor + '22', borderWidth: 1, borderColor: badgeColor, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 11, color: badgeColor, fontWeight: '700' }}>{item.estado}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color="#CBD5E1" style={{ marginTop: 6 }} />
+                </View>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      )}
+    </View>
+  );
+
+  // View I: Empresa Perfil
+  const renderEmpresaPerfil = () => (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.profileCard}>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="business" size={48} color="#5A3FA0" />
+        </View>
+        <Text style={styles.fullName}>{user?.fullName || 'Empresa Aliada'}</Text>
+        <Text style={styles.artisticBadge}>{user?.sector || 'Sector Comercial'}</Text>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <Ionicons name="mail" size={20} color="#5A3FA0" style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Correo Electrónico</Text>
+            <Text style={styles.infoValue}>{user?.email || 'empresa@correo.com'}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.actionsCard}>
+        <Text style={styles.cardTitle}>Seguridad y Cuenta</Text>
+        <TouchableOpacity onPress={() => setPasswordModalVisible(true)} style={styles.actionRow}>
+          <View style={styles.actionLeft}>
+            <View style={[styles.actionIconContainer, { backgroundColor: 'rgba(90, 63, 160, 0.15)' }]}>
+              <Ionicons name="lock-open" size={20} color="#5A3FA0" />
+            </View>
+            <View>
+              <Text style={styles.actionLabel}>Cambiar Contraseña</Text>
+              <Text style={styles.actionSub}>Actualiza tus credenciales de acceso</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  // View J: Admin Resumen
+  const renderAdminResumen = () => (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.welcomeBanner}>
+        <View style={styles.bannerFlex}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.welcomeTitle}>Panel del Administrador</Text>
+            <Text style={styles.welcomeSub}>Supervisa y gestiona la plataforma Jóvenes al Ruedo.</Text>
+          </View>
+          <Ionicons name="shield-checkmark" size={40} color="#2EC4B6" />
+        </View>
+      </View>
+
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 }}>
+        <View style={[styles.statCard, { width: '48%', marginBottom: 12 }]}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(46, 196, 182, 0.15)' }]}>
+            <Ionicons name="people" size={24} color="#2EC4B6" />
+          </View>
+          <Text style={styles.statNumber}>{metrics.totalUsuarios}</Text>
+          <Text style={styles.statLabel}>Total Usuarios</Text>
+        </View>
+
+        <View style={[styles.statCard, { width: '48%', marginBottom: 12 }]}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(90, 63, 160, 0.15)' }]}>
+            <Ionicons name="person" size={24} color="#5A3FA0" />
+          </View>
+          <Text style={styles.statNumber}>{metrics.totalArtistas}</Text>
+          <Text style={styles.statLabel}>Total Artistas</Text>
+        </View>
+
+        <View style={[styles.statCard, { width: '48%', marginBottom: 12 }]}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(242, 153, 74, 0.15)' }]}>
+            <Ionicons name="business" size={24} color="#F2994A" />
+          </View>
+          <Text style={styles.statNumber}>{metrics.totalEmpresas}</Text>
+          <Text style={styles.statLabel}>Total Empresas</Text>
+        </View>
+
+        <View style={[styles.statCard, { width: '48%', marginBottom: 12 }]}>
+          <View style={[styles.statIconCircle, { backgroundColor: 'rgba(46, 196, 182, 0.15)' }]}>
+            <Ionicons name="briefcase" size={24} color="#2EC4B6" />
+          </View>
+          <Text style={styles.statNumber}>{metrics.totalConvocatorias}</Text>
+          <Text style={styles.statLabel}>Convocatorias</Text>
+        </View>
+      </View>
+
+      <CustomButton
+        title="Exportar Métricas del Sistema"
+        onPress={() => customAlert('Éxito', 'El reporte excel con las métricas del sistema ha sido exportado correctamente.')}
+        variant="accent"
+      />
+    </ScrollView>
+  );
+
+  // View K: Admin Usuarios
+  const renderAdminUsuarios = () => {
+    const filteredUsers = todosUsuarios.filter(
+      u =>
+        u.fullName?.toLowerCase().includes(userSearchQuery.toLowerCase()) ||
+        u.email?.toLowerCase().includes(userSearchQuery.toLowerCase())
+    );
+
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={styles.searchBarContainer}>
+          <Ionicons name="search-outline" size={20} color="#A0AEC0" style={styles.searchIcon} />
+          <TextInput
+            placeholder="Buscar por nombre o correo..."
+            placeholderTextColor="#A0AEC0"
+            value={userSearchQuery}
+            onChangeText={setUserSearchQuery}
+            style={styles.searchInput}
+          />
+        </View>
+
+        <FlatList
+          data={filteredUsers}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.scrollContainer}
+          renderItem={({ item }) => (
+            <View style={styles.portfolioCard}>
+              <View style={[styles.portIconContainer, { backgroundColor: item.role === 'empresa' ? 'rgba(242, 153, 74, 0.15)' : 'rgba(46, 196, 182, 0.15)' }]}>
+                <Ionicons name={item.role === 'empresa' ? 'business' : 'person'} size={24} color={item.role === 'empresa' ? '#F2994A' : '#2EC4B6'} />
+              </View>
+              <View style={{ flex: 1, marginLeft: 16 }}>
+                <Text style={styles.portfolioCardTitle}>{item.fullName}</Text>
+                <Text style={styles.portfolioCardType}>{item.email}</Text>
+                <Text style={[styles.portfolioCardUrl, { color: '#CBD5E1' }]}>
+                  Rol: {item.role.toUpperCase()} {item.sector ? `• Sector: ${item.sector}` : ''} {item.artisticArea ? `• Área: ${item.artisticArea}` : ''}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <TouchableOpacity
+                  onPress={() => handleToggleUser(item.id, item.isActive)}
+                  style={{
+                    backgroundColor: item.isActive ? 'rgba(46, 196, 182, 0.15)' : 'rgba(242, 153, 74, 0.15)',
+                    borderWidth: 1,
+                    borderColor: item.isActive ? '#2EC4B6' : '#F2994A',
+                    paddingHorizontal: 8,
+                    paddingVertical: 6,
+                    borderRadius: 8,
+                  }}
+                >
+                  <Text style={{ fontSize: 11, color: item.isActive ? '#2EC4B6' : '#F2994A', fontWeight: '700' }}>
+                    {item.isActive ? 'Activo' : 'Inactivo'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        />
+      </View>
+    );
+  };
+
+  // View L: Admin Convocatorias
+  const renderAdminConvocatorias = () => (
+    <View style={{ flex: 1 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 16 }}>
+        <Text style={styles.subPageTitle}>Moderar Convocatorias</Text>
+      </View>
+
+      <FlatList
+        data={convs}
+        keyExtractor={(item) => item.id_conv.toString()}
+        contentContainerStyle={styles.scrollContainer}
+        renderItem={({ item }) => (
+          <View style={styles.jobCard}>
+            <View style={styles.jobHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.jobTitle}>{item.nombre}</Text>
+                <Text style={styles.jobCompany}>{item.empresa_nombre} • {item.ubicacion}</Text>
+              </View>
+              <TouchableOpacity onPress={() => handleDeleteConvAdmin(item.id_conv)} style={styles.deleteBtn}>
+                <Ionicons name="trash" size={20} color="#F2994A" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.jobDesc}>{item.glue}</Text>
+          </View>
+        )}
+      />
+    </View>
+  );
+
+  // View M: Admin Perfil
+  const renderAdminPerfil = () => (
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.profileCard}>
+        <View style={styles.avatarContainer}>
+          <Ionicons name="shield-checkmark" size={48} color="#2EC4B6" />
+        </View>
+        <Text style={styles.fullName}>{user?.fullName || 'Administrador'}</Text>
+        <Text style={styles.artisticBadge}>Administrador del Sistema</Text>
+        <View style={styles.divider} />
+        <View style={styles.infoRow}>
+          <Ionicons name="mail" size={20} color="#5A3FA0" style={styles.infoIcon} />
+          <View>
+            <Text style={styles.infoLabel}>Correo Electrónico</Text>
+            <Text style={styles.infoValue}>{user?.email || 'admin@ejemplo.com'}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.actionsCard}>
+        <Text style={styles.cardTitle}>Seguridad y Cuenta</Text>
+        <TouchableOpacity onPress={() => setPasswordModalVisible(true)} style={styles.actionRow}>
+          <View style={styles.actionLeft}>
+            <View style={[styles.actionIconContainer, { backgroundColor: 'rgba(90, 63, 160, 0.15)' }]}>
+              <Ionicons name="lock-open" size={20} color="#5A3FA0" />
+            </View>
+            <View>
+              <Text style={styles.actionLabel}>Cambiar Contraseña</Text>
+              <Text style={styles.actionSub}>Actualiza tus credenciales de acceso</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#CBD5E1" />
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
   return (
     <SafeAreaView style={styles.safeContainer}>
       {/* Header Bar */}
       <View style={styles.mainHeader}>
         <Text style={styles.mainHeaderTitle}>
-          {activeTab === 'resumen' && 'Jóvenes al Ruedo'}
-          {activeTab === 'convocatorias' && 'Convocatorias'}
+          {activeTab === 'resumen' && (user?.role === 'admin' ? 'Métricas Globales' : 'Jóvenes al Ruedo')}
+          {activeTab === 'convocatorias' && (user?.role === 'empresa' ? 'Mis Convocatorias' : 'Convocatorias')}
+          {activeTab === 'candidatos' && 'Candidatos'}
+          {activeTab === 'usuarios' && 'Gestión de Usuarios'}
           {activeTab === 'portafolio' && 'Portafolio'}
           {activeTab === 'chat' && 'Chats'}
           {activeTab === 'perfil' && 'Mi Perfil'}
@@ -597,54 +1176,48 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
 
       {/* Main Content Area */}
       <View style={{ flex: 1 }}>
-        {activeTab === 'resumen' && renderResumen()}
-        {activeTab === 'convocatorias' && renderConvocatorias()}
-        {activeTab === 'portafolio' && renderPortafolio()}
-        {activeTab === 'chat' && renderChat()}
-        {activeTab === 'perfil' && renderPerfil()}
+        {user?.role === 'artista' && (
+          <>
+            {activeTab === 'resumen' && renderResumen()}
+            {activeTab === 'convocatorias' && renderConvocatorias()}
+            {activeTab === 'portafolio' && renderPortafolio()}
+            {activeTab === 'chat' && renderChat()}
+            {activeTab === 'perfil' && renderPerfil()}
+          </>
+        )}
+        {user?.role === 'empresa' && (
+          <>
+            {activeTab === 'resumen' && renderEmpresaResumen()}
+            {activeTab === 'convocatorias' && renderEmpresaConvocatorias()}
+            {activeTab === 'candidatos' && renderEmpresaCandidatos()}
+            {activeTab === 'chat' && renderChat()}
+            {activeTab === 'perfil' && renderEmpresaPerfil()}
+          </>
+        )}
+        {user?.role === 'admin' && (
+          <>
+            {activeTab === 'resumen' && renderAdminResumen()}
+            {activeTab === 'usuarios' && renderAdminUsuarios()}
+            {activeTab === 'convocatorias' && renderAdminConvocatorias()}
+            {activeTab === 'perfil' && renderAdminPerfil()}
+          </>
+        )}
       </View>
 
       {/* Bottom Tabs Navigation Bar */}
       <View style={styles.bottomTabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'resumen' && styles.tabItemActive]}
-          onPress={() => setActiveTab('resumen')}
-        >
-          <Ionicons name="home" size={22} color={activeTab === 'resumen' ? '#2EC4B6' : '#A0AEC0'} />
-          <Text style={[styles.tabLabel, activeTab === 'resumen' && styles.tabLabelActive]}>Inicio</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'convocatorias' && styles.tabItemActive]}
-          onPress={() => setActiveTab('convocatorias')}
-        >
-          <Ionicons name="briefcase" size={22} color={activeTab === 'convocatorias' ? '#2EC4B6' : '#A0AEC0'} />
-          <Text style={[styles.tabLabel, activeTab === 'convocatorias' && styles.tabLabelActive]}>Convocas</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'portafolio' && styles.tabItemActive]}
-          onPress={() => setActiveTab('portafolio')}
-        >
-          <Ionicons name="folder" size={22} color={activeTab === 'portafolio' ? '#2EC4B6' : '#A0AEC0'} />
-          <Text style={[styles.tabLabel, activeTab === 'portafolio' && styles.tabLabelActive]}>Portafolio</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'chat' && styles.tabItemActive]}
-          onPress={() => setActiveTab('chat')}
-        >
-          <Ionicons name="chatbubbles" size={22} color={activeTab === 'chat' ? '#2EC4B6' : '#A0AEC0'} />
-          <Text style={[styles.tabLabel, activeTab === 'chat' && styles.tabLabelActive]}>Mensajes</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === 'perfil' && styles.tabItemActive]}
-          onPress={() => setActiveTab('perfil')}
-        >
-          <Ionicons name="person" size={22} color={activeTab === 'perfil' ? '#2EC4B6' : '#A0AEC0'} />
-          <Text style={[styles.tabLabel, activeTab === 'perfil' && styles.tabLabelActive]}>Perfil</Text>
-        </TouchableOpacity>
+        {getTabs().map((tab) => (
+          <TouchableOpacity
+            key={tab.id}
+            style={[styles.tabItem, activeTab === tab.id && styles.tabItemActive]}
+            onPress={() => setActiveTab(tab.id as any)}
+          >
+            <Ionicons name={tab.icon as any} size={22} color={activeTab === tab.id ? '#2EC4B6' : '#A0AEC0'} />
+            <Text style={[styles.tabLabel, activeTab === tab.id && styles.tabLabelActive]}>
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Modal 1: Convocatoria Details & Apply */}
@@ -989,6 +1562,240 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
                 )}
               </TouchableOpacity>
             </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Modal 6: Applicant Details (Company View) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={applicantModalVisible && !!selectedApplicant}
+        onRequestClose={() => {
+          setSelectedApplicant(null);
+          setApplicantModalVisible(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Detalles de Postulación</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedApplicant(null);
+                  setApplicantModalVisible(false);
+                }}
+                style={styles.closeBtn}
+              >
+                <Ionicons name="close-outline" size={28} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            {selectedApplicant && (
+              <ScrollView keyboardShouldPersistTaps="handled">
+                <Text style={styles.detailJobTitle}>{selectedApplicant.artista_nombre}</Text>
+                <Text style={styles.detailCompany}>Postulado a: {selectedApplicant.conv_nombre}</Text>
+
+                <View style={styles.detailInfoBlock}>
+                  <View style={styles.detailInfoItem}>
+                    <Ionicons name="mail-outline" size={18} color="#2EC4B6" />
+                    <Text style={styles.detailInfoText}>{selectedApplicant.artista_email}</Text>
+                  </View>
+                  <View style={styles.detailInfoItem}>
+                    <Ionicons name="calendar-outline" size={18} color="#2EC4B6" />
+                    <Text style={styles.detailInfoText}>{selectedApplicant.artista_edad} años</Text>
+                  </View>
+                  <View style={styles.detailInfoItem}>
+                    <Ionicons name="color-palette-outline" size={18} color="#2EC4B6" />
+                    <Text style={styles.detailInfoText}>{selectedApplicant.artista_area}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.detailSectionTitle}>Carta de Presentación</Text>
+                <Text style={styles.detailText}>
+                  {selectedApplicant.carta_presentacion || 'El candidato no adjuntó carta de presentación.'}
+                </Text>
+
+                {selectedApplicant.cv_url && (
+                  <>
+                    <Text style={styles.detailSectionTitle}>Hoja de Vida / CV Link</Text>
+                    <Text style={[styles.detailText, { color: '#2EC4B6', textDecorationLine: 'underline' }]}>
+                      {selectedApplicant.cv_url}
+                    </Text>
+                  </>
+                )}
+
+                <Text style={styles.detailSectionTitle}>Actualizar Estado del Candidato</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10, marginBottom: 20 }}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      handleUpdateStatus(selectedApplicant.id_i, 'Revisando');
+                      setSelectedApplicant(prev => prev ? { ...prev, estado: 'Revisando' } : null);
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(49, 130, 206, 0.15)',
+                      borderWidth: 1,
+                      borderColor: '#3182CE',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      marginRight: 6,
+                    }}
+                  >
+                    <Text style={{ color: '#3182CE', fontSize: 12, fontWeight: '700' }}>Revisando</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      handleUpdateStatus(selectedApplicant.id_i, 'Seleccionada');
+                      setSelectedApplicant(prev => prev ? { ...prev, estado: 'Seleccionada' } : null);
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(46, 196, 182, 0.15)',
+                      borderWidth: 1,
+                      borderColor: '#2EC4B6',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                      marginRight: 6,
+                    }}
+                  >
+                    <Text style={{ color: '#2EC4B6', fontSize: 12, fontWeight: '700' }}>Seleccionar</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      handleUpdateStatus(selectedApplicant.id_i, 'Rechazada');
+                      setSelectedApplicant(prev => prev ? { ...prev, estado: 'Rechazada' } : null);
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: 'rgba(242, 153, 74, 0.15)',
+                      borderWidth: 1,
+                      borderColor: '#F2994A',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#F2994A', fontSize: 12, fontWeight: '700' }}>Rechazar</Text>
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal 7: Create Convocatoria (Company View) */}
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={createConvModalVisible}
+        onRequestClose={() => setCreateConvModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Nueva Convocatoria</Text>
+              <TouchableOpacity onPress={() => setCreateConvModalVisible(false)} style={styles.closeBtn}>
+                <Ionicons name="close-outline" size={28} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 }}>
+              <CustomInput
+                label="Nombre de la Vacante"
+                placeholder="Ej. Cantante de Rock / Diseñador Gráfico"
+                value={newConvNombre}
+                onChangeText={setNewConvNombre}
+                iconName="briefcase-outline"
+              />
+
+              <CustomInput
+                label="Ubicación"
+                placeholder="Ej. Bogotá, Remoto, Medellín"
+                value={newConvUbicacion}
+                onChangeText={setNewConvUbicacion}
+                iconName="location-outline"
+              />
+
+              <CustomInput
+                label="Rango Salarial"
+                placeholder="Ej. $1.500.000 COP / A convenir"
+                value={newConvSalario}
+                onChangeText={setNewConvSalario}
+                iconName="cash-outline"
+              />
+
+              <Text style={styles.applyLabel}>Nivel de Experiencia Requerido</Text>
+              <View style={styles.typeSelectorRow}>
+                {['Sin experiencia', '1-2 años', '3+ años'].map((exp) => (
+                  <TouchableOpacity
+                    key={exp}
+                    onPress={() => setNewConvExp(exp)}
+                    style={[
+                      styles.typeSelectorItem,
+                      newConvExp === exp && styles.typeSelectorItemActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.typeSelectorLabel,
+                        newConvExp === exp && styles.typeSelectorLabelActive,
+                      ]}
+                    >
+                      {exp}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.applyLabel}>Tipo de Jornada</Text>
+              <View style={styles.typeSelectorRow}>
+                {['Tiempo Completo', 'Medio Tiempo', 'Por Proyecto', 'Freelance'].map((jornada) => (
+                  <TouchableOpacity
+                    key={jornada}
+                    onPress={() => setNewConvJornada(jornada)}
+                    style={[
+                      styles.typeSelectorItem,
+                      newConvJornada === jornada && styles.typeSelectorItemActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.typeSelectorLabel,
+                        newConvJornada === jornada && styles.typeSelectorLabelActive,
+                      ]}
+                    >
+                      {jornada}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.applyLabel}>Descripción de la Oferta / Requisitos</Text>
+              <TextInput
+                placeholder="Describe las funciones, requisitos y detalles del proyecto..."
+                placeholderTextColor="#A0AEC0"
+                multiline
+                numberOfLines={6}
+                value={newConvGlue}
+                onChangeText={setNewConvGlue}
+                style={styles.textArea}
+              />
+
+              <CustomButton
+                title="Publicar Convocatoria"
+                onPress={handleCreateConvSubmit}
+                isLoading={loading}
+                variant="accent"
+                style={{ marginTop: 16 }}
+              />
+            </ScrollView>
           </View>
         </KeyboardAvoidingView>
       </Modal>
