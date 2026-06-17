@@ -1176,7 +1176,7 @@ export function DashboardScreen({ navigation }: Props): React.JSX.Element {
 
       {/* Main Content Area */}
       <View style={{ flex: 1 }}>
-        {user?.role === 'artista' && (
+        {(!user?.role || user?.role === 'artista') && (
           <>
             {activeTab === 'resumen' && renderResumen()}
             {activeTab === 'convocatorias' && renderConvocatorias()}

@@ -54,6 +54,8 @@ export function LoginScreen({ navigation }: Props): React.JSX.Element {
         fullName: response.user.full_name,
         age: response.user.age,
         artisticArea: response.user.artistic_area,
+        role: response.user.role || 'artista',
+        sector: response.user.sector,
       };
       await persistUserSession(userObj);
 
