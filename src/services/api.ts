@@ -1083,6 +1083,9 @@ export const getTodosUsuarios = async (): Promise<any[]> => {
         .select('*');
       
       if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        throw new Error('No users found in Supabase (empty or RLS blocked), using mock users');
+      }
       return (data || []).map((u: any) => ({
         id: u.id,
         email: u.email,
@@ -1142,10 +1145,14 @@ export const getPlatformMetrics = async (): Promise<any> => {
       const { count: convsCount } = await supabase.from('conv').select('*', { count: 'exact', head: true });
       const { count: appsCount } = await supabase.from('inscripcion').select('*', { count: 'exact', head: true });
 
+      if ((usersCount === 0 || usersCount === null) && (convsCount === 0 || convsCount === null)) {
+        throw new Error('Database is empty or RLS is active, falling back to mock metrics');
+      }
+
       return {
         totalUsuarios: usersCount || 0,
-        totalArtistas: Math.round((usersCount || 0) * 0.7),
-        totalEmpresas: Math.round((usersCount || 0) * 0.3),
+        totalArtistas: Math.round((usersCount || 0) * 0.7) || 0,
+        totalEmpresas: Math.round((usersCount || 0) * 0.3) || 0,
         totalConvocatorias: convsCount || 0,
         totalPostulaciones: appsCount || 0,
       };
